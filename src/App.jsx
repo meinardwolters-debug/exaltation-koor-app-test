@@ -162,7 +162,6 @@ export default function App() {
   }
 
   function openPdfWithAudio(item) {
-    if (item.pdf_url) openLink(item.pdf_url);
 
     const audioUrl = getPreferredAudio(item);
     if (audioUrl) {
