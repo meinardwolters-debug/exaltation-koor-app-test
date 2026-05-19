@@ -9,6 +9,7 @@ const supabase = createClient(
 );
 
 const LAST_MEMBER_KEY = "exaltation_last_member_name";
+const MUSIC_BASE_URL = "https://gospelkoorexaltation.nl/muziek/";
 
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function fmt(d) {
@@ -64,6 +65,17 @@ export default function App() {
   useEffect(() => { loadMembers(); loadMusicLibrary(); loadEvents(); loadHistory(); }, []);
   useEffect(() => { if (selectedEvent) loadAttendance(selectedEvent); }, [selectedEventId]);
 
+  function normalizeMusicUrl(path) {
+    if (!path) return "";
+    const trimmed = path.trim();
+
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+      return trimmed;
+    }
+
+    return MUSIC_BASE_URL + trimmed.replace(/^\/+/, "");
+  }
+
   async function loadMusicLibrary() {
     const { data, error } = await supabase
       .from("music_library")
@@ -85,11 +97,11 @@ export default function App() {
     const { error } = await supabase.from("music_library").insert({
       title: newMusicTitle.trim(),
       category: newMusicCategory.trim() || "Algemeen",
-      pdf_url: newMusicPdf.trim(),
-      soprano_url: newMusicSoprano.trim(),
-      alto_url: newMusicAlto.trim(),
-      tenor_url: newMusicTenor.trim(),
-      bass_url: newMusicBass.trim(),
+      pdf_url: normalizeMusicUrl(newMusicPdf),
+      soprano_url: normalizeMusicUrl(newMusicSoprano),
+      alto_url: normalizeMusicUrl(newMusicAlto),
+      tenor_url: normalizeMusicUrl(newMusicTenor),
+      bass_url: normalizeMusicUrl(newMusicBass),
       notes: newMusicNotes.trim(),
       active: true
     });
@@ -430,6 +442,9 @@ export default function App() {
           {me.is_secretary && (
             <div className="card">
               <h2 className="music-admin-title">Muziek beheren</h2>
+              <p className="music-admin-helper">
+                Vul alleen het pad in vanaf <strong>/muziek/</strong>. De app maakt automatisch de volledige link.
+              </p>
 
               <div className="music-admin-form refined">
                 <div className="field-group full">
@@ -439,7 +454,7 @@ export default function App() {
 
                 <div className="field-group">
                   <label>PDF link</label>
-                  <input value={newMusicPdf} onChange={e=>setNewMusicPdf(e.target.value)} placeholder="PDF link" />
+                  <input value={newMusicPdf} onChange={e=>setNewMusicPdf(e.target.value)} placeholder="bladmuziek/amazing-grace.pdf" />
                 </div>
 
                 <div className="field-group">
@@ -449,22 +464,22 @@ export default function App() {
 
                 <div className="field-group">
                   <label>Sopraan audio link</label>
-                  <input value={newMusicSoprano} onChange={e=>setNewMusicSoprano(e.target.value)} placeholder="Sopraan audio link" />
+                  <input value={newMusicSoprano} onChange={e=>setNewMusicSoprano(e.target.value)} placeholder="audio/amazing-grace-sopraan.mp3" />
                 </div>
 
                 <div className="field-group">
                   <label>Alt audio link</label>
-                  <input value={newMusicAlto} onChange={e=>setNewMusicAlto(e.target.value)} placeholder="Alt audio link" />
+                  <input value={newMusicAlto} onChange={e=>setNewMusicAlto(e.target.value)} placeholder="audio/amazing-grace-alt.mp3" />
                 </div>
 
                 <div className="field-group">
                   <label>Tenor audio link</label>
-                  <input value={newMusicTenor} onChange={e=>setNewMusicTenor(e.target.value)} placeholder="Tenor audio link" />
+                  <input value={newMusicTenor} onChange={e=>setNewMusicTenor(e.target.value)} placeholder="audio/amazing-grace-tenor.mp3" />
                 </div>
 
                 <div className="field-group">
                   <label>Bas audio link</label>
-                  <input value={newMusicBass} onChange={e=>setNewMusicBass(e.target.value)} placeholder="Bas audio link" />
+                  <input value={newMusicBass} onChange={e=>setNewMusicBass(e.target.value)} placeholder="audio/amazing-grace-bas.mp3" />
                 </div>
 
                 <div className="field-group full">
