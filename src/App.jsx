@@ -8,6 +8,8 @@ const supabase = createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxd25uc2phZ25sd2JmZWxkaXZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5MjkyNzYsImV4cCI6MjA5NDUwNTI3Nn0.C8_pPWBLNmRMoINRqKrt2quxnyuuoU4I3H4BNykm0_g"
 );
 
+const LAST_MEMBER_KEY = "exaltation_last_member_name";
+
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function fmt(d) {
   return new Intl.DateTimeFormat("nl-NL", { weekday:"long", day:"numeric", month:"long", year:"numeric" }).format(new Date(d + "T12:00:00"));
@@ -39,6 +41,8 @@ export default function App() {
   const [newEventType, setNewEventType] = useState("repetitie");
   const [newEventTitle, setNewEventTitle] = useState("");
   const [newEventLocation, setNewEventLocation] = useState("");
+  const [loginTip, setLoginTip] = useState("Tip: je kunt deze app toevoegen aan je beginscherm.");
+  const [loginTipDraft, setLoginTipDraft] = useState("");
   const [historyRows, setHistoryRows] = useState([]);
 
   const selectedEvent = events.find(e => String(e.id) === String(selectedEventId)) || events[0];
@@ -47,8 +51,39 @@ export default function App() {
   const isSecretary = role === "secretaris" && secretaryCode === "koor2026";
   const my = me ? current[me.name] || { status:"onbekend", reason:"", note:"" } : { status:"onbekend", reason:"", note:"" };
 
-  useEffect(() => { loadMembers(); loadEvents(); loadHistory(); }, []);
+  useEffect(() => { loadMembers(); loadEvents(); loadHistory(); loadLoginTip(); }, []);
   useEffect(() => { if (selectedEvent) loadAttendance(selectedEvent); }, [selectedEventId]);
+
+  async function loadLoginTip() {
+    const { data, error } = await supabase
+      .from("app_settings")
+      .select("value")
+      .eq("key", "login_tip")
+      .maybeSingle();
+
+    if (!error && data?.value) {
+      setLoginTip(data.value);
+      setLoginTipDraft(data.value);
+    } else {
+      setLoginTipDraft(loginTip);
+    }
+  }
+
+  async function saveLoginTip() {
+    const text = loginTipDraft.trim() || "Welkom bij de Exaltation aanmeldapp.";
+    const { error } = await supabase
+      .from("app_settings")
+      .upsert(
+        { key: "login_tip", value: text, updated_at: new Date().toISOString() },
+        { onConflict: "key" }
+      );
+
+    if (error) return setMsg("Tip opslaan mislukt: " + error.message);
+
+    setLoginTip(text);
+    setLoginTipDraft(text);
+    setMsg("Tip op inlogpagina bijgewerkt.");
+  }
 
   async function loadMembers() {
     const { data, error } = await supabase.from("members")
@@ -56,7 +91,11 @@ export default function App() {
       .order("voice").order("name");
     if (error) return setMsg("Ledenlijst kon niet geladen worden: " + error.message);
     setMembers(data || []);
-    if (!selectedName && data?.length) setSelectedName(data[0].name);
+    if (!selectedName && data?.length) {
+      const lastName = localStorage.getItem(LAST_MEMBER_KEY);
+      const remembered = data.find(m => m.name === lastName);
+      setSelectedName(remembered ? remembered.name : data[0].name);
+    }
   }
 
   async function loadHistory() {
@@ -97,6 +136,7 @@ export default function App() {
     if (!found) return setMsg("Kies eerst je naam.");
     if (!found.login_code) return setMsg("Voor dit lid is nog geen persoonlijke code ingesteld.");
     if (String(found.login_code).trim() !== String(loginCode).trim()) return setMsg("De persoonlijke code klopt niet.");
+    localStorage.setItem(LAST_MEMBER_KEY, found.name);
     setMe(found); if (found.is_secretary) setRole("secretaris");
     setMsg(""); setSaveMsg("");
   }
@@ -248,10 +288,27 @@ export default function App() {
       <section className="login-card">
         <img src="/exaltation.png" className="login-logo" alt="Exaltation Gospel Koor" />
         <p className="eyebrow">Exaltation Gospel Koor</p><h1>Inloggen</h1>
-        <p>Kies je naam en vul je persoonlijke code in.</p><div className="pwa-note">Tip: je kunt deze app toevoegen aan je beginscherm.</div>
-        <label>Naam</label><select value={selectedName} onChange={e=>setSelectedName(e.target.value)}>{members.map(m=><option key={m.name} value={m.name}>{m.name} · {m.voice}</option>)}</select>
-        <label>Persoonlijke code</label><input type="password" value={loginCode} onChange={e=>setLoginCode(e.target.value)} placeholder="Bijvoorbeeld 1234" />
-        <button className="full-button" onClick={login}>Inloggen</button>
+        <p>Kies je naam en vul je persoonlijke code in.</p><div className="pwa-note">{loginTip}</div>
+        <form onSubmit={e => { e.preventDefault(); login(); }}>
+          <label>Naam</label><select
+            name="username"
+            autoComplete="username"
+            value={selectedName}
+            onChange={e=>{
+              setSelectedName(e.target.value);
+              localStorage.setItem(LAST_MEMBER_KEY, e.target.value);
+            }}
+          >{members.map(m=><option key={m.name} value={m.name}>{m.name} · {m.voice}</option>)}</select>
+        <label>Persoonlijke code</label><input
+          type="password"
+          name="password"
+          autoComplete="current-password"
+          value={loginCode}
+          onChange={e=>setLoginCode(e.target.value)}
+          placeholder="Persoonlijke code"
+        />
+        <button className="full-button" type="submit">Inloggen</button>
+        </form>
         {msg && <div className="message">{msg}</div>}
       </section>
     </main>
@@ -276,17 +333,17 @@ export default function App() {
               <button className={my.status==="misschien"?"status-button active-maybe":"status-button"} onClick={()=>updateEntry({status:"misschien"})}>Misschien</button>
             </div>
             <label>Reden</label><select value={my.reason} onChange={e=>updateEntry({reason:e.target.value})}><option value="">Geen reden</option><option>Ziek</option><option>Werk</option><option>Vakantie</option><option>Familie</option><option>Vervoer</option><option>Anders</option></select>
-            <label>Opmerking</label><input value={my.note} onChange={e=>updateEntry({note:e.target.value})} placeholder="Bijvoorbeeld: ik kom wat later" />
+            <label>Opmerking</label><input value={my.note} onChange={e=>updateEntry({note:e.target.value})} autoComplete="off" placeholder="Bijvoorbeeld: ik kom wat later" />
             <div className="current">Huidige keuze: <strong>{my.status}</strong></div>{saveMsg && <div className="save-message">{saveMsg}</div>}
 
             <details className="account-box">
               <summary>Mijn persoonlijke code wijzigen</summary>
               <label>Huidige code</label>
-              <input type="password" value={currentCode} onChange={e=>setCurrentCode(e.target.value)} placeholder="Huidige code" />
+              <input type="password" value={currentCode} onChange={e=>setCurrentCode(e.target.value)} autoComplete="off" placeholder="Huidige code" />
               <label>Nieuwe code</label>
-              <input type="password" value={newOwnCode} onChange={e=>setNewOwnCode(e.target.value)} placeholder="Minimaal 4 tekens" />
+              <input type="password" value={newOwnCode} onChange={e=>setNewOwnCode(e.target.value)} autoComplete="new-password" placeholder="Minimaal 4 tekens" />
               <label>Nieuwe code herhalen</label>
-              <input type="password" value={repeatOwnCode} onChange={e=>setRepeatOwnCode(e.target.value)} placeholder="Herhaal nieuwe code" />
+              <input type="password" value={repeatOwnCode} onChange={e=>setRepeatOwnCode(e.target.value)} autoComplete="new-password" placeholder="Herhaal nieuwe code" />
               <button className="full-button" onClick={changeOwnCode}>Code wijzigen</button>
             </details>
           </> : <><label>Secretariscode</label><input type="password" value={secretaryCode} onChange={e=>setSecretaryCode(e.target.value)} placeholder="Secretariscode" /></>}
@@ -294,6 +351,17 @@ export default function App() {
         </div>
         {isSecretary && <div className="card dashboard">
           <div className="dash-head"><div><h2>Dashboard secretaris</h2><p>{selectedEvent ? fmt(selectedEvent.event_date) : ""}</p></div><button className="outline" onClick={exportCsv}>CSV export</button></div>
+          <h3>Inlogpagina bericht</h3>
+          <div className="tip-editor">
+            <textarea
+              value={loginTipDraft}
+              onChange={e=>setLoginTipDraft(e.target.value)}
+              placeholder="Bericht of tip voor de inlogpagina"
+              rows="3"
+            />
+            <button onClick={saveLoginTip}>Tip opslaan</button>
+          </div>
+
           <div className="stat-grid"><div className="stat green"><strong>{stats.aanwezig}</strong><span>Aanwezig</span></div><div className="stat red"><strong>{stats.afwezig}</strong><span>Afwezig</span></div><div className="stat yellow"><strong>{stats.misschien}</strong><span>Misschien</span></div><div className="stat grey"><strong>{stats.onbekend}</strong><span>Onbekend</span></div></div>
 
           <h3>Overzicht per stemgroep</h3>
@@ -312,7 +380,7 @@ export default function App() {
             ))}
           </div>
 
-          <h3>Momenten beheren</h3><div className="event-form"><input type="date" value={newEventDate} onChange={e=>setNewEventDate(e.target.value)} /><select value={newEventType} onChange={e=>setNewEventType(e.target.value)}><option value="repetitie">Repetitie</option><option value="optreden">Optreden</option></select><input value={newEventTitle} onChange={e=>setNewEventTitle(e.target.value)} placeholder="Titel, optioneel" /><input value={newEventLocation} onChange={e=>setNewEventLocation(e.target.value)} placeholder="Locatie, optioneel" /><button onClick={addEvent}>Toevoegen</button></div>
+          <h3>Momenten beheren</h3><div className="event-form"><input type="date" value={newEventDate} onChange={e=>setNewEventDate(e.target.value)} /><select value={newEventType} onChange={e=>setNewEventType(e.target.value)}><option value="repetitie">Repetitie</option><option value="optreden">Optreden</option></select><input value={newEventTitle} onChange={e=>setNewEventTitle(e.target.value)} autoComplete="off" placeholder="Titel, optioneel" /><input value={newEventLocation} onChange={e=>setNewEventLocation(e.target.value)} autoComplete="off" placeholder="Locatie, optioneel" /><button onClick={addEvent}>Toevoegen</button></div>
           <div className="table-wrap compact">
             <table>
               <thead>
@@ -394,8 +462,8 @@ export default function App() {
           </div>
 
           <h3>Aanmeldingen</h3><div className="table-wrap"><table><thead><tr><th>Lid</th><th>Stemgroep</th><th>Status</th><th>Reden/opmerking</th></tr></thead><tbody>{members.map(m=>{const e=current[m.name]||{status:"onbekend",reason:"",note:""};return <tr key={m.name}><td>{m.name}</td><td>{m.voice}</td><td><span className="pill">{e.status}</span></td><td>{[e.reason,e.note].filter(Boolean).join(" · ") || "—"}</td></tr>})}</tbody></table></div>
-          <h3>Ledenbeheer</h3><div className="member-form"><input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Naam" /><select value={newVoice} onChange={e=>setNewVoice(e.target.value)}><option>Sopraan</option><option>Alt</option><option>Tenor</option><option>Bas</option></select><input value={newCode} onChange={e=>setNewCode(e.target.value)} placeholder="Code" /><button onClick={addMember}>Lid toevoegen</button></div>
-          <div className="table-wrap"><table><thead><tr><th>Naam</th><th>Stemgroep</th><th>Code</th><th>Actie</th></tr></thead><tbody>{members.map(m=><tr key={m.name}><td>{m.name}</td><td><select value={m.voice} onChange={e=>changeVoice(m.name,e.target.value)}><option>Sopraan</option><option>Alt</option><option>Tenor</option><option>Bas</option></select></td><td><input value={m.login_code || ""} onChange={e=>changeCode(m.name,e.target.value)} /></td><td><button className="outline danger" onClick={()=>removeMember(m.name)}>Verwijderen</button></td></tr>)}</tbody></table></div>
+          <h3>Ledenbeheer</h3><div className="member-form"><input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Naam" /><select value={newVoice} onChange={e=>setNewVoice(e.target.value)}><option>Sopraan</option><option>Alt</option><option>Tenor</option><option>Bas</option><option>Dirigent</option></select><input value={newCode} onChange={e=>setNewCode(e.target.value)} placeholder="Code" /><button onClick={addMember}>Lid toevoegen</button></div>
+          <div className="table-wrap"><table><thead><tr><th>Naam</th><th>Stemgroep</th><th>Code</th><th>Actie</th></tr></thead><tbody>{members.map(m=><tr key={m.name}><td>{m.name}</td><td><select value={m.voice} onChange={e=>changeVoice(m.name,e.target.value)}><option>Sopraan</option><option>Alt</option><option>Tenor</option><option>Bas</option><option>Dirigent</option></select></td><td><input value={m.login_code || ""} onChange={e=>changeCode(m.name,e.target.value)} /></td><td><button className="outline danger" onClick={()=>removeMember(m.name)}>Verwijderen</button></td></tr>)}</tbody></table></div>
         </div>}
       </section>
     </div></main>
