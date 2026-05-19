@@ -102,3 +102,47 @@
   margin:-10px 0 28px;
   line-height:1.5;
 }
+
+
+.audio-popup-backdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(2,6,23,.62);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  z-index:9999;
+}
+
+.audio-popup{
+  width:min(460px,100%);
+  background:#fff;
+  border-radius:28px;
+  padding:26px;
+  box-shadow:0 24px 90px rgba(0,0,0,.35);
+  position:relative;
+}
+
+.audio-popup h3{
+  margin:6px 0 6px;
+}
+
+.audio-popup-close{
+  position:absolute;
+  top:14px;
+  right:14px;
+  width:38px;
+  height:38px;
+  border-radius:999px;
+  padding:0;
+  background:#f1f5f9;
+  color:#0f172a;
+  font-size:24px;
+  line-height:1;
+}
+
+.audio-player{
+  width:100%;
+  margin:18px 0 10px;
+}

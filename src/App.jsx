@@ -54,6 +54,7 @@ export default function App() {
   const [newMusicTenor, setNewMusicTenor] = useState("");
   const [newMusicBass, setNewMusicBass] = useState("");
   const [newMusicNotes, setNewMusicNotes] = useState("");
+  const [audioPopup, setAudioPopup] = useState(null);
   const [historyRows, setHistoryRows] = useState([]);
 
   const selectedEvent = events.find(e => String(e.id) === String(selectedEventId)) || events[0];
@@ -145,6 +146,32 @@ export default function App() {
   function openLink(url) {
     if (!url) return;
     window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  function getPreferredAudio(item) {
+    if (!me?.voice) return item.soprano_url || item.alto_url || item.tenor_url || item.bass_url || "";
+
+    const voice = me.voice.toLowerCase();
+
+    if (voice.includes("sopraan")) return item.soprano_url;
+    if (voice.includes("alt")) return item.alto_url;
+    if (voice.includes("tenor")) return item.tenor_url;
+    if (voice.includes("bas")) return item.bass_url;
+
+    return item.soprano_url || item.alto_url || item.tenor_url || item.bass_url || "";
+  }
+
+  function openPdfWithAudio(item) {
+    if (item.pdf_url) openLink(item.pdf_url);
+
+    const audioUrl = getPreferredAudio(item);
+    if (audioUrl) {
+      setAudioPopup({
+        title: item.title,
+        voice: me?.voice || "audio",
+        url: audioUrl
+      });
+    }
   }
 
   async function loadMembers() {
@@ -426,7 +453,7 @@ export default function App() {
                     {item.notes && <p className="music-notes">{item.notes}</p>}
                   </div>
                   <div className="music-actions">
-                    {item.pdf_url && <button className="outline" onClick={()=>openLink(item.pdf_url)}>PDF bladmuziek</button>}
+                    {item.pdf_url && <button className="outline" onClick={()=>openPdfWithAudio(item)}>PDF bladmuziek</button>}
                     {item.soprano_url && <button className="outline" onClick={()=>openLink(item.soprano_url)}>Sopraan audio</button>}
                     {item.alto_url && <button className="outline" onClick={()=>openLink(item.alto_url)}>Alt audio</button>}
                     {item.tenor_url && <button className="outline" onClick={()=>openLink(item.tenor_url)}>Tenor audio</button>}
@@ -652,6 +679,18 @@ export default function App() {
           <div className="table-wrap"><table><thead><tr><th>Naam</th><th>Stemgroep</th><th>Code</th><th>Actie</th></tr></thead><tbody>{members.map(m=><tr key={m.name}><td>{m.name}</td><td><select value={m.voice} onChange={e=>changeVoice(m.name,e.target.value)}><option>Sopraan</option><option>Alt</option><option>Tenor</option><option>Bas</option></select></td><td><input value={m.login_code || ""} onChange={e=>changeCode(m.name,e.target.value)} /></td><td><button className="outline danger" onClick={()=>removeMember(m.name)}>Verwijderen</button></td></tr>)}</tbody></table></div>
         </div>}
       </section>
+      )}
+      {audioPopup && (
+        <div className="audio-popup-backdrop">
+          <div className="audio-popup">
+            <button className="audio-popup-close" onClick={() => setAudioPopup(null)}>×</button>
+            <p className="eyebrow">Oefenbestand</p>
+            <h3>{audioPopup.title}</h3>
+            <p className="subtitle">Audio voor: {audioPopup.voice}</p>
+            <audio controls src={audioPopup.url} className="audio-player" />
+            <button className="outline full-button" onClick={() => setAudioPopup(null)}>Sluiten</button>
+          </div>
+        </div>
       )}
     </div></main>
   );
