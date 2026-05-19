@@ -26,6 +26,7 @@ export default function App() {
   const [loginCode, setLoginCode] = useState("");
   const [me, setMe] = useState(null);
   const [role, setRole] = useState("lid");
+  const [activeSection, setActiveSection] = useState("aanmelden");
   const [secretaryCode, setSecretaryCode] = useState("");
   const [selectedEventId, setSelectedEventId] = useState("");
   const [registrations, setRegistrations] = useState({});
@@ -41,8 +42,17 @@ export default function App() {
   const [newEventType, setNewEventType] = useState("repetitie");
   const [newEventTitle, setNewEventTitle] = useState("");
   const [newEventLocation, setNewEventLocation] = useState("");
-  const [loginTip, setLoginTip] = useState("Tip: je kunt deze app toevoegen aan je beginscherm.");
-  const [loginTipDraft, setLoginTipDraft] = useState("");
+  const [musicItems, setMusicItems] = useState([]);
+  const [musicSearch, setMusicSearch] = useState("");
+  const [musicCategoryFilter, setMusicCategoryFilter] = useState("Alles");
+  const [newMusicTitle, setNewMusicTitle] = useState("");
+  const [newMusicCategory, setNewMusicCategory] = useState("Algemeen");
+  const [newMusicPdf, setNewMusicPdf] = useState("");
+  const [newMusicSoprano, setNewMusicSoprano] = useState("");
+  const [newMusicAlto, setNewMusicAlto] = useState("");
+  const [newMusicTenor, setNewMusicTenor] = useState("");
+  const [newMusicBass, setNewMusicBass] = useState("");
+  const [newMusicNotes, setNewMusicNotes] = useState("");
   const [historyRows, setHistoryRows] = useState([]);
 
   const selectedEvent = events.find(e => String(e.id) === String(selectedEventId)) || events[0];
@@ -51,38 +61,78 @@ export default function App() {
   const isSecretary = role === "secretaris" && secretaryCode === "koor2026";
   const my = me ? current[me.name] || { status:"onbekend", reason:"", note:"" } : { status:"onbekend", reason:"", note:"" };
 
-  useEffect(() => { loadMembers(); loadEvents(); loadHistory(); loadLoginTip(); }, []);
+  useEffect(() => { loadMembers(); loadMusicLibrary(); loadEvents(); loadHistory(); }, []);
   useEffect(() => { if (selectedEvent) loadAttendance(selectedEvent); }, [selectedEventId]);
 
-  async function loadLoginTip() {
+  async function loadMusicLibrary() {
     const { data, error } = await supabase
-      .from("app_settings")
-      .select("value")
-      .eq("key", "login_tip")
-      .maybeSingle();
+      .from("music_library")
+      .select("*")
+      .eq("active", true)
+      .order("title");
 
-    if (!error && data?.value) {
-      setLoginTip(data.value);
-      setLoginTipDraft(data.value);
-    } else {
-      setLoginTipDraft(loginTip);
+    if (error) {
+      setMsg("Muziekbibliotheek kon niet geladen worden: " + error.message);
+      return;
     }
+
+    setMusicItems(data || []);
   }
 
-  async function saveLoginTip() {
-    const text = loginTipDraft.trim() || "Welkom bij de Exaltation aanmeldapp.";
+  async function addMusicItem() {
+    if (!newMusicTitle.trim()) return setMsg("Vul minimaal een titel in.");
+
+    const { error } = await supabase.from("music_library").insert({
+      title: newMusicTitle.trim(),
+      category: newMusicCategory.trim() || "Algemeen",
+      pdf_url: newMusicPdf.trim(),
+      soprano_url: newMusicSoprano.trim(),
+      alto_url: newMusicAlto.trim(),
+      tenor_url: newMusicTenor.trim(),
+      bass_url: newMusicBass.trim(),
+      notes: newMusicNotes.trim(),
+      active: true
+    });
+
+    if (error) return setMsg("Lied toevoegen mislukt: " + error.message);
+
+    setNewMusicTitle("");
+    setNewMusicPdf("");
+    setNewMusicSoprano("");
+    setNewMusicAlto("");
+    setNewMusicTenor("");
+    setNewMusicBass("");
+    setNewMusicNotes("");
+    setMsg("Lied toegevoegd aan muziekbibliotheek.");
+    await loadMusicLibrary();
+  }
+
+  async function updateMusicItem(id, field, value) {
     const { error } = await supabase
-      .from("app_settings")
-      .upsert(
-        { key: "login_tip", value: text, updated_at: new Date().toISOString() },
-        { onConflict: "key" }
-      );
+      .from("music_library")
+      .update({ [field]: value })
+      .eq("id", id);
 
-    if (error) return setMsg("Tip opslaan mislukt: " + error.message);
+    if (error) return setMsg("Muziekitem wijzigen mislukt: " + error.message);
 
-    setLoginTip(text);
-    setLoginTipDraft(text);
-    setMsg("Tip op inlogpagina bijgewerkt.");
+    setMusicItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+  }
+
+  async function removeMusicItem(id) {
+    const { error } = await supabase
+      .from("music_library")
+      .update({ active: false })
+      .eq("id", id);
+
+    if (error) return setMsg("Muziekitem verwijderen mislukt: " + error.message);
+
+    setMsg("Muziekitem verwijderd.");
+    await loadMusicLibrary();
+  }
+
+  function openLink(url) {
+    if (!url) return;
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   async function loadMembers() {
@@ -283,12 +333,26 @@ export default function App() {
     link.href = url; link.download = `exaltation-aanmeldingen-${selectedEvent.event_date}.csv`; link.click(); URL.revokeObjectURL(url);
   }
 
+  const musicCategories = useMemo(() => {
+    const cats = Array.from(new Set(musicItems.map(item => item.category || "Algemeen")));
+    return ["Alles", ...cats];
+  }, [musicItems]);
+
+  const filteredMusicItems = useMemo(() => {
+    const search = musicSearch.toLowerCase().trim();
+    return musicItems.filter(item => {
+      const categoryOk = musicCategoryFilter === "Alles" || (item.category || "Algemeen") === musicCategoryFilter;
+      const searchText = `${item.title || ""} ${item.category || ""} ${item.notes || ""}`.toLowerCase();
+      return categoryOk && (!search || searchText.includes(search));
+    });
+  }, [musicItems, musicSearch, musicCategoryFilter]);
+
   if (!me) return (
     <main className="page login-page">
       <section className="login-card">
         <img src="/exaltation.png" className="login-logo" alt="Exaltation Gospel Koor" />
         <p className="eyebrow">Exaltation Gospel Koor</p><h1>Inloggen</h1>
-        <p>Kies je naam en vul je persoonlijke code in.</p><div className="pwa-note">{loginTip}</div>
+        <p>Kies je naam en vul je persoonlijke code in.</p><div className="pwa-note">Tip: je kunt deze app toevoegen aan je beginscherm.</div>
         <form onSubmit={e => { e.preventDefault(); login(); }}>
           <label>Naam</label><select
             name="username"
@@ -320,7 +384,89 @@ export default function App() {
         <img src="/exaltation.png" className="logo" alt="Exaltation Gospel Koor" />
         <div><p className="eyebrow">Exaltation Gospel Koor</p><h1>Aan- en afmelden</h1><p className="subtitle">Ingelogd als {me.name} · {me.voice}</p></div>
       </div><div className="top-actions">{me.is_secretary && <div className="tabs"><button className={role==="lid"?"active":""} onClick={()=>setRole("lid")}>Lid</button><button className={role==="secretaris"?"active":""} onClick={()=>setRole("secretaris")}>Secretaris</button></div>}</div></header>
+
+      <nav className="section-nav">
+        <button className={activeSection === "aanmelden" ? "active" : ""} onClick={() => setActiveSection("aanmelden")}>Aanmelden</button>
+        <button className={activeSection === "muziek" ? "active" : ""} onClick={() => setActiveSection("muziek")}>Muziekbibliotheek</button>
+        {me.is_secretary && <button className={activeSection === "secretaris" ? "active" : ""} onClick={() => { setActiveSection("secretaris"); setRole("secretaris"); }}>Secretaris</button>}
+      </nav>
+
       {msg && <div className="message">{msg}</div>}
+      {activeSection === "muziek" && (
+        <section className="music-section">
+          <div className="card">
+            <h2>Muziekbibliotheek</h2>
+            <p className="subtitle">Bladmuziek en oefenbestanden voor Exaltation.</p>
+
+            <div className="music-filters">
+              <input value={musicSearch} onChange={e=>setMusicSearch(e.target.value)} placeholder="Zoek op titel, categorie of opmerking" autoComplete="off" />
+              <select value={musicCategoryFilter} onChange={e=>setMusicCategoryFilter(e.target.value)}>
+                {musicCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
+            </div>
+
+            <div className="music-grid">
+              {filteredMusicItems.map(item => (
+                <div className="music-card" key={item.id}>
+                  <div>
+                    <p className="eyebrow">{item.category || "Algemeen"}</p>
+                    <h3>{item.title}</h3>
+                    {item.notes && <p className="music-notes">{item.notes}</p>}
+                  </div>
+                  <div className="music-actions">
+                    {item.pdf_url && <button className="outline" onClick={()=>openLink(item.pdf_url)}>PDF bladmuziek</button>}
+                    {item.soprano_url && <button className="outline" onClick={()=>openLink(item.soprano_url)}>Sopraan audio</button>}
+                    {item.alto_url && <button className="outline" onClick={()=>openLink(item.alto_url)}>Alt audio</button>}
+                    {item.tenor_url && <button className="outline" onClick={()=>openLink(item.tenor_url)}>Tenor audio</button>}
+                    {item.bass_url && <button className="outline" onClick={()=>openLink(item.bass_url)}>Bas audio</button>}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {filteredMusicItems.length === 0 && <div className="locked">Geen muziek gevonden.</div>}
+          </div>
+
+          {me.is_secretary && (
+            <div className="card">
+              <h2>Muziek beheren</h2>
+              <div className="music-admin-form">
+                <input value={newMusicTitle} onChange={e=>setNewMusicTitle(e.target.value)} placeholder="Titel lied" />
+                <input value={newMusicCategory} onChange={e=>setNewMusicCategory(e.target.value)} placeholder="Categorie" />
+                <input value={newMusicPdf} onChange={e=>setNewMusicPdf(e.target.value)} placeholder="PDF link" />
+                <input value={newMusicSoprano} onChange={e=>setNewMusicSoprano(e.target.value)} placeholder="Sopraan audio link" />
+                <input value={newMusicAlto} onChange={e=>setNewMusicAlto(e.target.value)} placeholder="Alt audio link" />
+                <input value={newMusicTenor} onChange={e=>setNewMusicTenor(e.target.value)} placeholder="Tenor audio link" />
+                <input value={newMusicBass} onChange={e=>setNewMusicBass(e.target.value)} placeholder="Bas audio link" />
+                <textarea value={newMusicNotes} onChange={e=>setNewMusicNotes(e.target.value)} placeholder="Opmerking, optioneel" rows="3" />
+                <button onClick={addMusicItem}>Lied toevoegen</button>
+              </div>
+
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Titel</th><th>Categorie</th><th>PDF</th><th>Sopraan</th><th>Alt</th><th>Tenor</th><th>Bas</th><th>Actie</th></tr></thead>
+                  <tbody>
+                    {musicItems.map(item => (
+                      <tr key={item.id}>
+                        <td><input value={item.title || ""} onChange={e=>updateMusicItem(item.id, "title", e.target.value)} /></td>
+                        <td><input value={item.category || ""} onChange={e=>updateMusicItem(item.id, "category", e.target.value)} /></td>
+                        <td><input value={item.pdf_url || ""} onChange={e=>updateMusicItem(item.id, "pdf_url", e.target.value)} /></td>
+                        <td><input value={item.soprano_url || ""} onChange={e=>updateMusicItem(item.id, "soprano_url", e.target.value)} /></td>
+                        <td><input value={item.alto_url || ""} onChange={e=>updateMusicItem(item.id, "alto_url", e.target.value)} /></td>
+                        <td><input value={item.tenor_url || ""} onChange={e=>updateMusicItem(item.id, "tenor_url", e.target.value)} /></td>
+                        <td><input value={item.bass_url || ""} onChange={e=>updateMusicItem(item.id, "bass_url", e.target.value)} /></td>
+                        <td><button className="outline danger" onClick={()=>removeMusicItem(item.id)}>Verwijderen</button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {activeSection !== "muziek" && (
       <section className={isSecretary ? "grid" : "single-grid"}>
         <div className="card"><h2>Repetitie of optreden</h2>
           <label>Datum</label><select value={selectedEventId} onChange={e=>setSelectedEventId(e.target.value)}>{events.map(e=><option key={e.id} value={e.id}>{fmt(e.event_date)} · {e.event_type} · {e.title || ""}</option>)}</select>
@@ -351,17 +497,6 @@ export default function App() {
         </div>
         {isSecretary && <div className="card dashboard">
           <div className="dash-head"><div><h2>Dashboard secretaris</h2><p>{selectedEvent ? fmt(selectedEvent.event_date) : ""}</p></div><button className="outline" onClick={exportCsv}>CSV export</button></div>
-          <h3>Inlogpagina bericht</h3>
-          <div className="tip-editor">
-            <textarea
-              value={loginTipDraft}
-              onChange={e=>setLoginTipDraft(e.target.value)}
-              placeholder="Bericht of tip voor de inlogpagina"
-              rows="3"
-            />
-            <button onClick={saveLoginTip}>Tip opslaan</button>
-          </div>
-
           <div className="stat-grid"><div className="stat green"><strong>{stats.aanwezig}</strong><span>Aanwezig</span></div><div className="stat red"><strong>{stats.afwezig}</strong><span>Afwezig</span></div><div className="stat yellow"><strong>{stats.misschien}</strong><span>Misschien</span></div><div className="stat grey"><strong>{stats.onbekend}</strong><span>Onbekend</span></div></div>
 
           <h3>Overzicht per stemgroep</h3>
@@ -462,10 +597,11 @@ export default function App() {
           </div>
 
           <h3>Aanmeldingen</h3><div className="table-wrap"><table><thead><tr><th>Lid</th><th>Stemgroep</th><th>Status</th><th>Reden/opmerking</th></tr></thead><tbody>{members.map(m=>{const e=current[m.name]||{status:"onbekend",reason:"",note:""};return <tr key={m.name}><td>{m.name}</td><td>{m.voice}</td><td><span className="pill">{e.status}</span></td><td>{[e.reason,e.note].filter(Boolean).join(" · ") || "—"}</td></tr>})}</tbody></table></div>
-          <h3>Ledenbeheer</h3><div className="member-form"><input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Naam" /><select value={newVoice} onChange={e=>setNewVoice(e.target.value)}><option>Sopraan</option><option>Alt</option><option>Tenor</option><option>Bas</option><option>Dirigent</option></select><input value={newCode} onChange={e=>setNewCode(e.target.value)} placeholder="Code" /><button onClick={addMember}>Lid toevoegen</button></div>
-          <div className="table-wrap"><table><thead><tr><th>Naam</th><th>Stemgroep</th><th>Code</th><th>Actie</th></tr></thead><tbody>{members.map(m=><tr key={m.name}><td>{m.name}</td><td><select value={m.voice} onChange={e=>changeVoice(m.name,e.target.value)}><option>Sopraan</option><option>Alt</option><option>Tenor</option><option>Bas</option><option>Dirigent</option></select></td><td><input value={m.login_code || ""} onChange={e=>changeCode(m.name,e.target.value)} /></td><td><button className="outline danger" onClick={()=>removeMember(m.name)}>Verwijderen</button></td></tr>)}</tbody></table></div>
+          <h3>Ledenbeheer</h3><div className="member-form"><input value={newName} onChange={e=>setNewName(e.target.value)} placeholder="Naam" /><select value={newVoice} onChange={e=>setNewVoice(e.target.value)}><option>Sopraan</option><option>Alt</option><option>Tenor</option><option>Bas</option></select><input value={newCode} onChange={e=>setNewCode(e.target.value)} placeholder="Code" /><button onClick={addMember}>Lid toevoegen</button></div>
+          <div className="table-wrap"><table><thead><tr><th>Naam</th><th>Stemgroep</th><th>Code</th><th>Actie</th></tr></thead><tbody>{members.map(m=><tr key={m.name}><td>{m.name}</td><td><select value={m.voice} onChange={e=>changeVoice(m.name,e.target.value)}><option>Sopraan</option><option>Alt</option><option>Tenor</option><option>Bas</option></select></td><td><input value={m.login_code || ""} onChange={e=>changeCode(m.name,e.target.value)} /></td><td><button className="outline danger" onClick={()=>removeMember(m.name)}>Verwijderen</button></td></tr>)}</tbody></table></div>
         </div>}
       </section>
+      )}
     </div></main>
   );
 }
