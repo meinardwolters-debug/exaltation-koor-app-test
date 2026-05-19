@@ -151,243 +151,41 @@ export default function App() {
     window.open(url, "_blank", "noopener,noreferrer");
   }
 
-  function getPreferredAudio(item) {
-    if (!me?.voice) return item.soprano_url || item.alto_url || item.tenor_url || item.bass_url || "";
+  function getVoiceAudios(item) {
+    const voice = String(me?.voice || "").trim().toLowerCase();
+    const audios = [];
 
-    const voice = me.voice.toLowerCase();
+    const add = (label, url) => {
+      if (url) audios.push({ label, url });
+    };
 
-    const voice = (me?.voice || "").trim().toLowerCase(); return item.soprano_url;
-    if (voice.includes("alt")) return item.alto_url;
-    if (voice.includes("tenor")) return item.tenor_url;
-    if (voice.includes("bas")) return item.bass_url;
+    if (voice.includes("dirigent")) {
+      add("Sopraan", item.soprano_url);
+      add("Alt", item.alto_url);
+      add("Tenor", item.tenor_url);
+      add("Bas", item.bass_url);
+      return audios;
+    }
 
-    return item.soprano_url || item.alto_url || item.tenor_url || item.bass_url || "";
+    if (voice.includes("sopraan")) add("Sopraan", item.soprano_url);
+    else if (voice.includes("alt")) add("Alt", item.alto_url);
+    else if (voice.includes("tenor")) add("Tenor", item.tenor_url);
+    else if (voice.includes("bas")) add("Bas", item.bass_url);
+
+    return audios;
   }
 
   function openPdfWithAudio(item) {
-    const audioUrl = getPreferredAudio(item);
-    if (audioUrl) {
-      setAudioPopup({
-        title: item.title,
-        voice: me?.voice || "audio",
-        url: audioUrl,
-        pdf: item.pdf_url,
-        choir: item.choir_url
-      });
-    }
-  }
+    const voiceAudios = getVoiceAudios(item);
 
-  async function loadMembers() {
-    const { data, error } = await supabase.from("members")
-      .select("name,voice,login_code,is_secretary").eq("active", true)
-      .order("voice").order("name");
-    if (error) return setMsg("Ledenlijst kon niet geladen worden: " + error.message);
-    setMembers(data || []);
-    if (!selectedName && data?.length) {
-      const lastName = localStorage.getItem(LAST_MEMBER_KEY);
-      const remembered = data.find(m => m.name === lastName);
-      setSelectedName(remembered ? remembered.name : data[0].name);
-    }
-  }
-
-  async function loadHistory() {
-    const { data, error } = await supabase
-      .from("attendance")
-      .select("member_name,status,rehearsal_date")
-      .order("rehearsal_date", { ascending: false });
-
-    if (!error && data) setHistoryRows(data);
-  }
-
-  async function loadEvents() {
-    const { data, error } = await supabase.from("events")
-      .select("id,event_date,event_type,title,location,active")
-      .eq("active", true).gte("event_date", todayISO()).order("event_date");
-    if (error) {
-      const f = fallbackEvents();
-      setEvents(f); setSelectedEventId(f[0].id);
-      return setMsg("Evenementen konden niet geladen worden. Voer supabase-events-update.sql uit.");
-    }
-    const list = data?.length ? data : fallbackEvents();
-    setEvents(list);
-    if (!selectedEventId && list.length) setSelectedEventId(String(list[0].id));
-  }
-
-  async function loadAttendance(event) {
-    const { data, error } = await supabase.from("attendance")
-      .select("member_name,status,reason,note")
-      .eq("event_id", event.id);
-    if (error) return setMsg("Aanmeldingen konden niet geladen worden: " + error.message);
-    const map = {};
-    (data || []).forEach(r => map[r.member_name] = { status:r.status, reason:r.reason || "", note:r.note || "" });
-    setRegistrations(prev => ({ ...prev, [String(event.id)]: map }));
-  }
-
-  function login() {
-    const found = members.find(m => m.name === selectedName);
-    if (!found) return setMsg("Kies eerst je naam.");
-    if (!found.login_code) return setMsg("Voor dit lid is nog geen persoonlijke code ingesteld.");
-    if (String(found.login_code).trim() !== String(loginCode).trim()) return setMsg("De persoonlijke code klopt niet.");
-    localStorage.setItem(LAST_MEMBER_KEY, found.name);
-    setMe(found); if (found.is_secretary) setRole("secretaris");
-    setMsg(""); setSaveMsg("");
-  }
-
-  function logout() { setMe(null); setLoginCode(""); setRole("lid"); setSecretaryCode(""); setSaveMsg(""); }
-
-  async function updateEntry(part) {
-    if (!me?.name) return setMsg("Je bent nog niet ingelogd.");
-    if (!selectedEvent) return setMsg("Kies eerst een repetitie of optreden.");
-    const next = { ...my, ...part };
-    setRegistrations(prev => ({ ...prev, [eventKey]: { ...(prev[eventKey] || {}), [me.name]: next } }));
-    const { error } = await supabase.from("attendance").upsert({
-      event_id:selectedEvent.id, rehearsal_date:selectedEvent.event_date, member_name:me.name,
-      status:next.status, reason:next.reason, note:next.note, updated_at:new Date().toISOString()
-    }, { onConflict:"event_id,member_name" });
-    if (error) { setSaveMsg(""); return setMsg("Opslaan mislukt: " + error.message); }
-    setMsg(""); setSaveMsg("Online opgeslagen."); await loadAttendance(selectedEvent);
-  }
-
-  async function changeOwnCode() {
-    if (!me?.name) return setMsg("Je bent nog niet ingelogd.");
-    if (!currentCode.trim() || !newOwnCode.trim() || !repeatOwnCode.trim()) {
-      return setMsg("Vul alle codevelden in.");
-    }
-    if (String(currentCode).trim() !== String(me.login_code).trim()) {
-      return setMsg("De huidige code klopt niet.");
-    }
-    if (newOwnCode.trim().length < 4) {
-      return setMsg("Kies een nieuwe code van minimaal 4 tekens.");
-    }
-    if (newOwnCode.trim() !== repeatOwnCode.trim()) {
-      return setMsg("De nieuwe codes zijn niet gelijk.");
-    }
-
-    const { error } = await supabase
-      .from("members")
-      .update({ login_code: newOwnCode.trim() })
-      .eq("name", me.name);
-
-    if (error) return setMsg("Code wijzigen mislukt: " + error.message);
-
-    setMe(prev => ({ ...prev, login_code: newOwnCode.trim() }));
-    setMembers(prev => prev.map(m => m.name === me.name ? { ...m, login_code: newOwnCode.trim() } : m));
-    setCurrentCode("");
-    setNewOwnCode("");
-    setRepeatOwnCode("");
-    setMsg("");
-    setSaveMsg("Je persoonlijke code is gewijzigd.");
-  }
-
-  async function addMember() {
-    if (!newName.trim() || !newCode.trim()) return setMsg("Vul naam en persoonlijke code in.");
-    const { error } = await supabase.from("members").insert({ name:newName.trim(), voice:newVoice, login_code:newCode.trim(), active:true, is_secretary:false });
-    if (error) return setMsg("Lid toevoegen mislukt: " + error.message);
-    setNewName(""); setNewCode(""); setMsg("Lid toegevoegd."); await loadMembers();
-  }
-  async function removeMember(name) {
-    const { error } = await supabase.from("members").update({ active:false }).eq("name", name);
-    if (error) return setMsg("Verwijderen mislukt: " + error.message);
-    setMsg("Lid uit actieve lijst gehaald."); await loadMembers();
-  }
-  async function changeVoice(name, voice) {
-    const { error } = await supabase.from("members").update({ voice }).eq("name", name);
-    if (error) return setMsg("Stemgroep wijzigen mislukt: " + error.message);
-    setMembers(prev => prev.map(m => m.name === name ? { ...m, voice } : m));
-  }
-  async function changeCode(name, code) {
-    const { error } = await supabase.from("members").update({ login_code:code }).eq("name", name);
-    if (error) return setMsg("Code wijzigen mislukt: " + error.message);
-    setMembers(prev => prev.map(m => m.name === name ? { ...m, login_code:code } : m));
-  }
-
-  async function addEvent() {
-    if (!newEventDate) return setMsg("Kies een datum.");
-    const title = newEventTitle.trim() || (newEventType === "optreden" ? "Optreden" : "Repetitie");
-    const { error } = await supabase.from("events").insert({ event_date:newEventDate, event_type:newEventType, title, location:newEventLocation.trim(), active:true });
-    if (error) return setMsg("Moment toevoegen mislukt: " + error.message);
-    setNewEventTitle(""); setNewEventLocation(""); setMsg("Moment toegevoegd."); await loadEvents();
-  }
-
-  async function updateEventField(id, field, value) {
-    const { error } = await supabase
-      .from("events")
-      .update({ [field]: value })
-      .eq("id", id);
-
-    if (error) return setMsg("Moment wijzigen mislukt: " + error.message);
-
-    setEvents(prev =>
-      prev.map(e => e.id === id ? { ...e, [field]: value } : e)
-    );
-
-    setMsg("Moment bijgewerkt.");
-  }
-
-  async function removeEvent(id) {
-    const { error } = await supabase.from("events").update({ active:false }).eq("id", id);
-    if (error) return setMsg("Moment verwijderen mislukt: " + error.message);
-    setMsg("Moment verwijderd uit de lijst."); await loadEvents();
-  }
-
-  const stats = useMemo(() => {
-    const r = { aanwezig:0, afwezig:0, misschien:0, onbekend:0 };
-    members.forEach(m => r[current[m.name]?.status || "onbekend"]++);
-    return r;
-  }, [members, current]);
-
-  const voiceStats = useMemo(() => {
-    const groups = {};
-    members.forEach(m => {
-      if (!groups[m.voice]) groups[m.voice] = { aanwezig:0, afwezig:0, misschien:0, onbekend:0, totaal:0 };
-      const status = current[m.name]?.status || "onbekend";
-      groups[m.voice][status]++;
-      groups[m.voice].totaal++;
+    setAudioPopup({
+      title: item.title,
+      voice: me?.voice || "lid",
+      pdf: item.pdf_url,
+      audios: voiceAudios,
+      choir: item.choir_url
     });
-    return groups;
-  }, [members, current]);
-
-  const memberHistory = useMemo(() => {
-    const grouped = {};
-    historyRows.forEach(r => {
-      if (!grouped[r.member_name]) {
-        grouped[r.member_name] = { aanwezig: 0, afwezig: 0, misschien: 0, onbekend: 0, totaal: 0 };
-      }
-      grouped[r.member_name].totaal++;
-      if (grouped[r.member_name][r.status] !== undefined) {
-        grouped[r.member_name][r.status]++;
-      }
-    });
-    return grouped;
-  }, [historyRows]);
-
-  function exportCsv() {
-    if (!selectedEvent) return;
-    const rows = [["Datum","Type","Titel","Locatie","Lid","Stemgroep","Status","Reden","Opmerking"]];
-    members.forEach(m => {
-      const e = current[m.name] || { status:"onbekend", reason:"", note:"" };
-      rows.push([fmt(selectedEvent.event_date), selectedEvent.event_type, selectedEvent.title || "", selectedEvent.location || "", m.name, m.voice, e.status, e.reason, e.note]);
-    });
-    const csv = rows.map(row => row.map(cell => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\\n");
-    const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url; link.download = `exaltation-aanmeldingen-${selectedEvent.event_date}.csv`; link.click(); URL.revokeObjectURL(url);
   }
-
-  const musicCategories = useMemo(() => {
-    const cats = Array.from(new Set(musicItems.map(item => item.category || "Algemeen")));
-    return ["Alles", ...cats];
-  }, [musicItems]);
-
-  const filteredMusicItems = useMemo(() => {
-    const search = musicSearch.toLowerCase().trim();
-    return musicItems.filter(item => {
-      const categoryOk = musicCategoryFilter === "Alles" || (item.category || "Algemeen") === musicCategoryFilter;
-      const searchText = `${item.title || ""} ${item.category || ""} ${item.notes || ""}`.toLowerCase();
-      return categoryOk && (!search || searchText.includes(search));
-    });
-  }, [musicItems, musicSearch, musicCategoryFilter]);
 
   if (!me) return (
     <main className="page login-page">
@@ -456,11 +254,17 @@ export default function App() {
                     {item.notes && <p className="music-notes">{item.notes}</p>}
                   </div>
                   <div className="music-actions">
-                    {item.pdf_url && <button className="outline" onClick={()=>openPdfWithAudio(item)}>PDF bladmuziek</button>}
-                    {item.soprano_url && <button className="outline" onClick={()=>openLink(item.soprano_url)}>Sopraan audio</button>}
-                    {item.alto_url && <button className="outline" onClick={()=>openLink(item.alto_url)}>Alt audio</button>}
-                    {item.tenor_url && <button className="outline" onClick={()=>openLink(item.tenor_url)}>Tenor audio</button>}
-                    {item.bass_url && <button className="outline" onClick={()=>openLink(item.bass_url)}>Bas audio</button>}
+                    {item.pdf_url && <button className="outline" onClick={()=>openPdfWithAudio(item)}>PDF + oefenen</button>}
+
+                    {String(me?.voice || "").toLowerCase().includes("dirigent") && (
+                      <>
+                        {item.soprano_url && <button className="outline" onClick={()=>openLink(item.soprano_url)}>Sopraan audio</button>}
+                        {item.alto_url && <button className="outline" onClick={()=>openLink(item.alto_url)}>Alt audio</button>}
+                        {item.tenor_url && <button className="outline" onClick={()=>openLink(item.tenor_url)}>Tenor audio</button>}
+                        {item.bass_url && <button className="outline" onClick={()=>openLink(item.bass_url)}>Bas audio</button>}
+                      </>
+                    )}
+
                     {item.choir_url && <button className="outline choir-button" onClick={()=>openLink(item.choir_url)}>Volledige kooropname</button>}
                   </div>
                 </div>
@@ -697,35 +501,57 @@ export default function App() {
 
             <div className="audio-popup-header">
               <div>
-                <p className="eyebrow">Oefenbestand</p>
+                <p className="eyebrow">Oefenvenster</p>
                 <h3>{audioPopup.title}</h3>
-                <p className="subtitle">Audio voor: {audioPopup.voice}</p>
+                <p className="subtitle">Ingelogd als: {me?.voice || "lid"}</p>
               </div>
 
-              <button
-                className="outline"
-                onClick={() => window.open(audioPopup.pdf, "_blank", "noopener,noreferrer")}
-              >
-                PDF openen in nieuw venster
-              </button>
+              {audioPopup.pdf && (
+                <button
+                  className="outline"
+                  onClick={() => window.open(audioPopup.pdf, "_blank", "noopener,noreferrer")}
+                >
+                  PDF openen in nieuw venster
+                </button>
+              )}
             </div>
 
-            <div className="pdf-viewer-wrapper">
-              <iframe
-                src={audioPopup.pdf}
-                title="Bladmuziek"
-                className="pdf-viewer"
-              />
-            </div>
-
-            <audio controls src={audioPopup.url} className="audio-player large-player" />
-
-            {audioPopup.choir && (
-              <div className="choir-player">
-                <p className="subtitle"><strong>Volledige kooropname</strong></p>
-                <audio controls src={audioPopup.choir} className="audio-player" />
+            {audioPopup.pdf ? (
+              <div className="pdf-viewer-wrapper">
+                <iframe src={audioPopup.pdf} title="Bladmuziek" className="pdf-viewer" />
               </div>
+            ) : (
+              <div className="locked">Voor dit lied is nog geen PDF-link ingevoerd.</div>
             )}
+
+            <div className="practice-audio-panel">
+              <h4>Stemgroepaudio</h4>
+
+              {audioPopup.audios?.length ? (
+                audioPopup.audios.map(audio => (
+                  <div className="practice-audio-block" key={audio.label}>
+                    <p><strong>{audio.label}</strong></p>
+                    <audio controls src={audio.url} className="audio-player" />
+                  </div>
+                ))
+              ) : (
+                <div className="locked">Voor jouw stemgroep is nog geen audio gekoppeld.</div>
+              )}
+
+              {audioPopup.choir && (
+                <div className="choir-player">
+                  <p><strong>Volledige kooropname</strong></p>
+                  <audio controls src={audioPopup.choir} className="audio-player" />
+                </div>
+              )}
+            </div>
+
+            <button className="outline full-button" onClick={() => setAudioPopup(null)}>
+              Sluiten
+            </button>
+          </div>
+        </div>
+      )}
 
             <button className="outline full-button" onClick={() => setAudioPopup(null)}>
               Sluiten
