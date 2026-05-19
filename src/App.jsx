@@ -53,6 +53,7 @@ export default function App() {
   const [newMusicAlto, setNewMusicAlto] = useState("");
   const [newMusicTenor, setNewMusicTenor] = useState("");
   const [newMusicBass, setNewMusicBass] = useState("");
+  const [newMusicChoir, setNewMusicChoir] = useState("");
   const [newMusicNotes, setNewMusicNotes] = useState("");
   const [audioPopup, setAudioPopup] = useState(null);
   const [historyRows, setHistoryRows] = useState([]);
@@ -103,6 +104,7 @@ export default function App() {
       alto_url: normalizeMusicUrl(newMusicAlto),
       tenor_url: normalizeMusicUrl(newMusicTenor),
       bass_url: normalizeMusicUrl(newMusicBass),
+      choir_url: normalizeMusicUrl(newMusicChoir),
       notes: newMusicNotes.trim(),
       active: true
     });
@@ -115,6 +117,7 @@ export default function App() {
     setNewMusicAlto("");
     setNewMusicTenor("");
     setNewMusicBass("");
+    setNewMusicChoir("");
     setNewMusicNotes("");
     setMsg("Lied toegevoegd aan muziekbibliotheek.");
     await loadMusicLibrary();
@@ -162,6 +165,7 @@ export default function App() {
   }
 
   function openPdfWithAudio(item) {
+    if (item.pdf_url) openLink(item.pdf_url);
 
     const audioUrl = getPreferredAudio(item);
     if (audioUrl) {
@@ -169,7 +173,8 @@ export default function App() {
         title: item.title,
         voice: me?.voice || "audio",
         url: audioUrl,
-        pdf: item.pdf_url
+        pdf: item.pdf_url,
+        choir: item.choir_url
       });
     }
   }
@@ -458,6 +463,7 @@ export default function App() {
                     {item.alto_url && <button className="outline" onClick={()=>openLink(item.alto_url)}>Alt audio</button>}
                     {item.tenor_url && <button className="outline" onClick={()=>openLink(item.tenor_url)}>Tenor audio</button>}
                     {item.bass_url && <button className="outline" onClick={()=>openLink(item.bass_url)}>Bas audio</button>}
+                    {item.choir_url && <button className="outline choir-button" onClick={()=>openLink(item.choir_url)}>Volledige kooropname</button>}
                   </div>
                 </div>
               ))}
@@ -509,6 +515,11 @@ export default function App() {
                   <input value={newMusicBass} onChange={e=>setNewMusicBass(e.target.value)} placeholder="audio/amazing-grace-bas.mp3" />
                 </div>
 
+                <div className="field-group full choir-field">
+                  <label>Volledige kooropname</label>
+                  <input value={newMusicChoir} onChange={e=>setNewMusicChoir(e.target.value)} placeholder="audio/amazing-grace-koor.mp3" />
+                </div>
+
                 <div className="field-group full">
                   <label>Opmerking (optioneel)</label>
                   <textarea value={newMusicNotes} onChange={e=>setNewMusicNotes(e.target.value)} placeholder="Opmerking, optioneel" rows="4" />
@@ -522,7 +533,7 @@ export default function App() {
 
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Titel</th><th>Categorie</th><th>PDF</th><th>Sopraan</th><th>Alt</th><th>Tenor</th><th>Bas</th><th>Actie</th></tr></thead>
+                  <thead><tr><th>Titel</th><th>Categorie</th><th>PDF</th><th>Sopraan</th><th>Alt</th><th>Tenor</th><th>Bas</th><th>Koor</th><th>Actie</th></tr></thead>
                   <tbody>
                     {musicItems.map(item => (
                       <tr key={item.id}>
@@ -533,6 +544,7 @@ export default function App() {
                         <td><input value={item.alto_url || ""} onChange={e=>updateMusicItem(item.id, "alto_url", e.target.value)} /></td>
                         <td><input value={item.tenor_url || ""} onChange={e=>updateMusicItem(item.id, "tenor_url", e.target.value)} /></td>
                         <td><input value={item.bass_url || ""} onChange={e=>updateMusicItem(item.id, "bass_url", e.target.value)} /></td>
+                        <td><input value={item.choir_url || ""} onChange={e=>updateMusicItem(item.id, "choir_url", e.target.value)} /></td>
                         <td><button className="outline danger" onClick={()=>removeMusicItem(item.id)}>Verwijderen</button></td>
                       </tr>
                     ))}
@@ -709,6 +721,13 @@ export default function App() {
             </div>
 
             <audio controls src={audioPopup.url} className="audio-player large-player" />
+
+            {audioPopup.choir && (
+              <div className="choir-player">
+                <p className="subtitle"><strong>Volledige kooropname</strong></p>
+                <audio controls src={audioPopup.choir} className="audio-player" />
+              </div>
+            )}
 
             <button className="outline full-button" onClick={() => setAudioPopup(null)}>
               Sluiten

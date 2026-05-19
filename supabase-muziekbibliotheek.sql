@@ -32,3 +32,7 @@ create policy "music_library_update" on public.music_library for update to anon 
 insert into public.music_library (title, category, notes, active)
 select 'Voorbeeldlied', 'Algemeen', 'Vervang dit voorbeeld door echte bladmuziek en audio-links.', true
 where not exists (select 1 from public.music_library);
+
+
+alter table public.music_library
+add column if not exists choir_url text;
