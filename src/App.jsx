@@ -156,7 +156,7 @@ export default function App() {
 
     const voice = me.voice.toLowerCase();
 
-    if (voice.includes("sopraan")) return item.soprano_url;
+    const voice = (me?.voice || "").trim().toLowerCase(); return item.soprano_url;
     if (voice.includes("alt")) return item.alto_url;
     if (voice.includes("tenor")) return item.tenor_url;
     if (voice.includes("bas")) return item.bass_url;
