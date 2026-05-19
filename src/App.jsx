@@ -429,17 +429,53 @@ export default function App() {
 
           {me.is_secretary && (
             <div className="card">
-              <h2>Muziek beheren</h2>
-              <div className="music-admin-form">
-                <input value={newMusicTitle} onChange={e=>setNewMusicTitle(e.target.value)} placeholder="Titel lied" />
-                <input value={newMusicCategory} onChange={e=>setNewMusicCategory(e.target.value)} placeholder="Categorie" />
-                <input value={newMusicPdf} onChange={e=>setNewMusicPdf(e.target.value)} placeholder="PDF link" />
-                <input value={newMusicSoprano} onChange={e=>setNewMusicSoprano(e.target.value)} placeholder="Sopraan audio link" />
-                <input value={newMusicAlto} onChange={e=>setNewMusicAlto(e.target.value)} placeholder="Alt audio link" />
-                <input value={newMusicTenor} onChange={e=>setNewMusicTenor(e.target.value)} placeholder="Tenor audio link" />
-                <input value={newMusicBass} onChange={e=>setNewMusicBass(e.target.value)} placeholder="Bas audio link" />
-                <textarea value={newMusicNotes} onChange={e=>setNewMusicNotes(e.target.value)} placeholder="Opmerking, optioneel" rows="3" />
-                <button onClick={addMusicItem}>Lied toevoegen</button>
+              <h2 className="music-admin-title">Muziek beheren</h2>
+
+              <div className="music-admin-form refined">
+                <div className="field-group full">
+                  <label>Titel lied</label>
+                  <input value={newMusicTitle} onChange={e=>setNewMusicTitle(e.target.value)} placeholder="Titel lied" />
+                </div>
+
+                <div className="field-group">
+                  <label>PDF link</label>
+                  <input value={newMusicPdf} onChange={e=>setNewMusicPdf(e.target.value)} placeholder="PDF link" />
+                </div>
+
+                <div className="field-group">
+                  <label>Algemeen (omschrijving / categorie)</label>
+                  <input value={newMusicCategory} onChange={e=>setNewMusicCategory(e.target.value)} placeholder="Algemeen" />
+                </div>
+
+                <div className="field-group">
+                  <label>Sopraan audio link</label>
+                  <input value={newMusicSoprano} onChange={e=>setNewMusicSoprano(e.target.value)} placeholder="Sopraan audio link" />
+                </div>
+
+                <div className="field-group">
+                  <label>Alt audio link</label>
+                  <input value={newMusicAlto} onChange={e=>setNewMusicAlto(e.target.value)} placeholder="Alt audio link" />
+                </div>
+
+                <div className="field-group">
+                  <label>Tenor audio link</label>
+                  <input value={newMusicTenor} onChange={e=>setNewMusicTenor(e.target.value)} placeholder="Tenor audio link" />
+                </div>
+
+                <div className="field-group">
+                  <label>Bas audio link</label>
+                  <input value={newMusicBass} onChange={e=>setNewMusicBass(e.target.value)} placeholder="Bas audio link" />
+                </div>
+
+                <div className="field-group full">
+                  <label>Opmerking (optioneel)</label>
+                  <textarea value={newMusicNotes} onChange={e=>setNewMusicNotes(e.target.value)} placeholder="Opmerking, optioneel" rows="4" />
+                </div>
+
+                <div className="music-admin-buttons">
+                  <button className="outline">Annuleren</button>
+                  <button onClick={addMusicItem}>Opslaan</button>
+                </div>
               </div>
 
               <div className="table-wrap">
