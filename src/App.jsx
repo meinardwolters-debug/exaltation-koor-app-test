@@ -169,7 +169,8 @@ export default function App() {
       setAudioPopup({
         title: item.title,
         voice: me?.voice || "audio",
-        url: audioUrl
+        url: audioUrl,
+        pdf: item.pdf_url
       });
     }
   }
@@ -682,13 +683,37 @@ export default function App() {
       )}
       {audioPopup && (
         <div className="audio-popup-backdrop">
-          <div className="audio-popup">
+          <div className="audio-popup large">
             <button className="audio-popup-close" onClick={() => setAudioPopup(null)}>×</button>
-            <p className="eyebrow">Oefenbestand</p>
-            <h3>{audioPopup.title}</h3>
-            <p className="subtitle">Audio voor: {audioPopup.voice}</p>
-            <audio controls src={audioPopup.url} className="audio-player" />
-            <button className="outline full-button" onClick={() => setAudioPopup(null)}>Sluiten</button>
+
+            <div className="audio-popup-header">
+              <div>
+                <p className="eyebrow">Oefenbestand</p>
+                <h3>{audioPopup.title}</h3>
+                <p className="subtitle">Audio voor: {audioPopup.voice}</p>
+              </div>
+
+              <button
+                className="outline"
+                onClick={() => window.open(audioPopup.pdf, "_blank", "noopener,noreferrer")}
+              >
+                PDF openen in nieuw venster
+              </button>
+            </div>
+
+            <div className="pdf-viewer-wrapper">
+              <iframe
+                src={audioPopup.pdf}
+                title="Bladmuziek"
+                className="pdf-viewer"
+              />
+            </div>
+
+            <audio controls src={audioPopup.url} className="audio-player large-player" />
+
+            <button className="outline full-button" onClick={() => setAudioPopup(null)}>
+              Sluiten
+            </button>
           </div>
         </div>
       )}
