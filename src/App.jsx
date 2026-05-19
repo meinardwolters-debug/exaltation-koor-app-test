@@ -552,13 +552,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-            <button className="outline full-button" onClick={() => setAudioPopup(null)}>
-              Sluiten
-            </button>
-          </div>
-        </div>
-      )}
     </div></main>
   );
 }
