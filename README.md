@@ -19,3 +19,13 @@ In Muziek beheren staan de audio-links nu twee aan twee:
 
 
 v9 clean practice: rolgebaseerde audio + mobiel oefenvenster.
+
+
+## Diagnoseversie
+Deze versie toont extra diagnosegegevens in de muziekbibliotheek en in het oefenvenster:
+- ingelogde naam
+- stemgroep
+- PDF-link
+- beschikbare audio-links
+- welke audio de app kiest
+Gebruik alleen op de testomgeving.
