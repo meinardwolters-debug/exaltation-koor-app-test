@@ -10,3 +10,9 @@ Eerst uitvoeren in Supabase SQL Editor:
 supabase-muziekbibliotheek.sql
 
 Daarna uploaden naar de TEST GitHub repository en deployen via Vercel testomgeving.
+
+
+## Kleine layout-aanpassing
+In Muziek beheren staan de audio-links nu twee aan twee:
+- Sopraan + Alt
+- Tenor + Bas
