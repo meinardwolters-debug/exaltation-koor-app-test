@@ -16,3 +16,6 @@ Daarna uploaden naar de TEST GitHub repository en deployen via Vercel testomgevi
 In Muziek beheren staan de audio-links nu twee aan twee:
 - Sopraan + Alt
 - Tenor + Bas
+
+
+v9 clean practice: rolgebaseerde audio + mobiel oefenvenster.
