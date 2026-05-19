@@ -217,41 +217,13 @@
   border-top:1px solid #e2e8f0;
 }
 
-/* v9 clean: oefenvenster met juiste audio per rol */
+/* v10: schone oefenpopup met audio per stemgroep */
 .audio-popup-backdrop{position:fixed;inset:0;background:rgba(2,6,23,.68);display:flex;align-items:flex-start;justify-content:center;padding:18px;z-index:9999;overflow:auto}
 .audio-popup.large{width:min(1180px,96vw);max-height:none;margin:0 auto;background:#fff;border-radius:28px;padding:24px;box-shadow:0 24px 90px rgba(0,0,0,.35);position:relative}
 .audio-popup-header{position:sticky;top:0;z-index:2;background:#fff;display:flex;justify-content:space-between;align-items:flex-start;gap:18px;padding-bottom:14px;margin-bottom:16px;border-bottom:1px solid #e5e7eb}
 .practice-audio-panel{margin-top:18px;display:grid;gap:14px}
 .practice-audio-panel h4{margin:0;font-size:1.1rem}
 .practice-audio-block,.choir-player{background:#f8fafc;border:1px solid #e5e7eb;border-radius:18px;padding:14px}
-.practice-audio-block p,.choir-player p{margin:0 0 8px}
-.audio-player{width:100%}
+.practice-audio-block p,.choir-player p{margin:0 0 8px}.audio-player{width:100%}
 @media(max-width:850px){.audio-popup-backdrop{padding:0;align-items:stretch}.audio-popup.large{width:100%;min-height:100vh;margin:0;border-radius:0;padding:12px}.audio-popup-header{position:relative;flex-direction:column;padding-right:44px}.audio-popup-header h3{font-size:1.15rem;margin-right:36px}.audio-popup-header .outline{width:100%}.pdf-viewer-wrapper{height:44vh;border-radius:14px}.music-actions{display:grid;grid-template-columns:1fr}}
 @media(max-width:480px){.pdf-viewer-wrapper{height:40vh}}
-
-.debug-box,
-.debug-card{
-  background:#fff7ed;
-  border:1px solid #fed7aa;
-  color:#7c2d12;
-  border-radius:14px;
-  padding:12px;
-  font-size:13px;
-  line-height:1.5;
-}
-
-.debug-box summary,
-.debug-card summary{
-  cursor:pointer;
-  font-weight:800;
-  margin-bottom:8px;
-}
-
-.debug-card{
-  margin-top:12px;
-  overflow-wrap:anywhere;
-}
-
-.debug-box{
-  overflow-wrap:anywhere;
-}

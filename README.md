@@ -18,14 +18,4 @@ In Muziek beheren staan de audio-links nu twee aan twee:
 - Tenor + Bas
 
 
-v9 clean practice: rolgebaseerde audio + mobiel oefenvenster.
-
-
-## Diagnoseversie
-Deze versie toont extra diagnosegegevens in de muziekbibliotheek en in het oefenvenster:
-- ingelogde naam
-- stemgroep
-- PDF-link
-- beschikbare audio-links
-- welke audio de app kiest
-Gebruik alleen op de testomgeving.
+v10 schone oefenpopup: alleen eigen stemgroepaudio + kooropname; dirigent alles.

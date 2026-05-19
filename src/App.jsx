@@ -180,11 +180,195 @@ export default function App() {
     setAudioPopup({
       title: item.title,
       voice: me?.voice || "lid",
-      pdf: item.pdf_url || "",
+      pdf: String(item.pdf_url || "").trim(),
       audios: getPracticeAudios(item),
-      choir: item.choir_url || ""
+      choir: String(item.choir_url || "").trim()
     });
   }
+
+  async function loadMembers() {
+    const { data, error } = await supabase.from("members")
+      .select("name,voice,login_code,is_secretary").eq("active", true)
+      .order("voice").order("name");
+    if (error) return setMsg("Ledenlijst kon niet geladen worden: " + error.message);
+    setMembers(data || []);
+    if (!selectedName && data?.length) {
+      const lastName = localStorage.getItem(LAST_MEMBER_KEY);
+      const remembered = data.find(m => m.name === lastName);
+      setSelectedName(remembered ? remembered.name : data[0].name);
+    }
+  }
+
+  async function loadHistory() {
+    const { data, error } = await supabase
+      .from("attendance")
+      .select("member_name,status,rehearsal_date")
+      .order("rehearsal_date", { ascending: false });
+
+    if (!error && data) setHistoryRows(data);
+  }
+
+  async function loadEvents() {
+    const { data, error } = await supabase.from("events")
+      .select("id,event_date,event_type,title,location,active")
+      .eq("active", true).gte("event_date", todayISO()).order("event_date");
+    if (error) {
+      const f = fallbackEvents();
+      setEvents(f); setSelectedEventId(f[0].id);
+      return setMsg("Evenementen konden niet geladen worden. Voer supabase-events-update.sql uit.");
+    }
+    const list = data?.length ? data : fallbackEvents();
+    setEvents(list);
+    if (!selectedEventId && list.length) setSelectedEventId(String(list[0].id));
+  }
+
+  async function loadAttendance(event) {
+    const { data, error } = await supabase.from("attendance")
+      .select("member_name,status,reason,note")
+      .eq("event_id", event.id);
+    if (error) return setMsg("Aanmeldingen konden niet geladen worden: " + error.message);
+    const map = {};
+    (data || []).forEach(r => map[r.member_name] = { status:r.status, reason:r.reason || "", note:r.note || "" });
+    setRegistrations(prev => ({ ...prev, [String(event.id)]: map }));
+  }
+
+  function login() {
+    const found = members.find(m => m.name === selectedName);
+    if (!found) return setMsg("Kies eerst je naam.");
+    if (!found.login_code) return setMsg("Voor dit lid is nog geen persoonlijke code ingesteld.");
+    if (String(found.login_code).trim() !== String(loginCode).trim()) return setMsg("De persoonlijke code klopt niet.");
+    localStorage.setItem(LAST_MEMBER_KEY, found.name);
+    setMe(found); if (found.is_secretary) setRole("secretaris");
+    setMsg(""); setSaveMsg("");
+  }
+
+  function logout() { setMe(null); setLoginCode(""); setRole("lid"); setSecretaryCode(""); setSaveMsg(""); }
+
+  async function updateEntry(part) {
+    if (!me?.name) return setMsg("Je bent nog niet ingelogd.");
+    if (!selectedEvent) return setMsg("Kies eerst een repetitie of optreden.");
+    const next = { ...my, ...part };
+    setRegistrations(prev => ({ ...prev, [eventKey]: { ...(prev[eventKey] || {}), [me.name]: next } }));
+    const { error } = await supabase.from("attendance").upsert({
+      event_id:selectedEvent.id, rehearsal_date:selectedEvent.event_date, member_name:me.name,
+      status:next.status, reason:next.reason, note:next.note, updated_at:new Date().toISOString()
+    }, { onConflict:"event_id,member_name" });
+    if (error) { setSaveMsg(""); return setMsg("Opslaan mislukt: " + error.message); }
+    setMsg(""); setSaveMsg("Online opgeslagen."); await loadAttendance(selectedEvent);
+  }
+
+  async function changeOwnCode() {
+    if (!me?.name) return setMsg("Je bent nog niet ingelogd.");
+    if (!currentCode.trim() || !newOwnCode.trim() || !repeatOwnCode.trim()) {
+      return setMsg("Vul alle codevelden in.");
+    }
+    if (String(currentCode).trim() !== String(me.login_code).trim()) {
+      return setMsg("De huidige code klopt niet.");
+    }
+    if (newOwnCode.trim().length < 4) {
+      return setMsg("Kies een nieuwe code van minimaal 4 tekens.");
+    }
+    if (newOwnCode.trim() !== repeatOwnCode.trim()) {
+      return setMsg("De nieuwe codes zijn niet gelijk.");
+    }
+
+    const { error } = await supabase
+      .from("members")
+      .update({ login_code: newOwnCode.trim() })
+      .eq("name", me.name);
+
+    if (error) return setMsg("Code wijzigen mislukt: " + error.message);
+
+    setMe(prev => ({ ...prev, login_code: newOwnCode.trim() }));
+    setMembers(prev => prev.map(m => m.name === me.name ? { ...m, login_code: newOwnCode.trim() } : m));
+    setCurrentCode("");
+    setNewOwnCode("");
+    setRepeatOwnCode("");
+    setMsg("");
+    setSaveMsg("Je persoonlijke code is gewijzigd.");
+  }
+
+  async function addMember() {
+    if (!newName.trim() || !newCode.trim()) return setMsg("Vul naam en persoonlijke code in.");
+    const { error } = await supabase.from("members").insert({ name:newName.trim(), voice:newVoice, login_code:newCode.trim(), active:true, is_secretary:false });
+    if (error) return setMsg("Lid toevoegen mislukt: " + error.message);
+    setNewName(""); setNewCode(""); setMsg("Lid toegevoegd."); await loadMembers();
+  }
+  async function removeMember(name) {
+    const { error } = await supabase.from("members").update({ active:false }).eq("name", name);
+    if (error) return setMsg("Verwijderen mislukt: " + error.message);
+    setMsg("Lid uit actieve lijst gehaald."); await loadMembers();
+  }
+  async function changeVoice(name, voice) {
+    const { error } = await supabase.from("members").update({ voice }).eq("name", name);
+    if (error) return setMsg("Stemgroep wijzigen mislukt: " + error.message);
+    setMembers(prev => prev.map(m => m.name === name ? { ...m, voice } : m));
+  }
+  async function changeCode(name, code) {
+    const { error } = await supabase.from("members").update({ login_code:code }).eq("name", name);
+    if (error) return setMsg("Code wijzigen mislukt: " + error.message);
+    setMembers(prev => prev.map(m => m.name === name ? { ...m, login_code:code } : m));
+  }
+
+  async function addEvent() {
+    if (!newEventDate) return setMsg("Kies een datum.");
+    const title = newEventTitle.trim() || (newEventType === "optreden" ? "Optreden" : "Repetitie");
+    const { error } = await supabase.from("events").insert({ event_date:newEventDate, event_type:newEventType, title, location:newEventLocation.trim(), active:true });
+    if (error) return setMsg("Moment toevoegen mislukt: " + error.message);
+    setNewEventTitle(""); setNewEventLocation(""); setMsg("Moment toegevoegd."); await loadEvents();
+  }
+
+  async function updateEventField(id, field, value) {
+    const { error } = await supabase
+      .from("events")
+      .update({ [field]: value })
+      .eq("id", id);
+
+    if (error) return setMsg("Moment wijzigen mislukt: " + error.message);
+
+    setEvents(prev =>
+      prev.map(e => e.id === id ? { ...e, [field]: value } : e)
+    );
+
+    setMsg("Moment bijgewerkt.");
+  }
+
+  async function removeEvent(id) {
+    const { error } = await supabase.from("events").update({ active:false }).eq("id", id);
+    if (error) return setMsg("Moment verwijderen mislukt: " + error.message);
+    setMsg("Moment verwijderd uit de lijst."); await loadEvents();
+  }
+
+  const stats = useMemo(() => {
+    const r = { aanwezig:0, afwezig:0, misschien:0, onbekend:0 };
+    members.forEach(m => r[current[m.name]?.status || "onbekend"]++);
+    return r;
+  }, [members, current]);
+
+  const voiceStats = useMemo(() => {
+    const groups = {};
+    members.forEach(m => {
+      if (!groups[m.voice]) groups[m.voice] = { aanwezig:0, afwezig:0, misschien:0, onbekend:0, totaal:0 };
+      const status = current[m.name]?.status || "onbekend";
+      groups[m.voice][status]++;
+      groups[m.voice].totaal++;
+    });
+    return groups;
+  }, [members, current]);
+
+  const memberHistory = useMemo(() => {
+    const grouped = {};
+    historyRows.forEach(r => {
+      if (!grouped[r.member_name]) {
+        grouped[r.member_name] = { aanwezig: 0, afwezig: 0, misschien: 0, onbekend: 0, totaal: 0 };
+      }
+      grouped[r.member_name].totaal++;
+      if (grouped[r.member_name][r.status] !== undefined) {
+        grouped[r.member_name][r.status]++;
+      }
+    });
+    return grouped;
+  }, [historyRows]);
 
   function exportCsv() {
     if (!selectedEvent) return;
@@ -279,15 +463,6 @@ export default function App() {
                     <p className="eyebrow">{item.category || "Algemeen"}</p>
                     <h3>{item.title}</h3>
                     {item.notes && <p className="music-notes">{item.notes}</p>}
-                    <details className="debug-card">
-                      <summary>Diagnose links</summary>
-                      <div><strong>PDF:</strong> {item.pdf_url || "geen"}</div>
-                      <div><strong>Sopraan:</strong> {item.soprano_url || "geen"}</div>
-                      <div><strong>Alt:</strong> {item.alto_url || "geen"}</div>
-                      <div><strong>Tenor:</strong> {item.tenor_url || "geen"}</div>
-                      <div><strong>Bas:</strong> {item.bass_url || "geen"}</div>
-                      <div><strong>Koor:</strong> {item.choir_url || "geen"}</div>
-                    </details>
                   </div>
                   <div className="music-actions">
                     {item.pdf_url && (
@@ -571,16 +746,6 @@ export default function App() {
             <div className="practice-audio-panel">
               <h4>Audio oefenen</h4>
 
-              <details className="debug-box" open>
-                <summary>Diagnosegegevens</summary>
-                <div><strong>Ingelogde naam:</strong> {me?.name}</div>
-                <div><strong>Stemgroep volgens app:</strong> [{me?.voice}]</div>
-                <div><strong>Lied:</strong> {audioPopup.title}</div>
-                <div><strong>PDF:</strong> {audioPopup.pdf || "geen PDF"}</div>
-                <div><strong>Gekozen stemgroepaudio:</strong> {audioPopup.audios?.map(a => a.label).join(", ") || "geen"}</div>
-                <div><strong>Kooropname:</strong> {audioPopup.choir ? "aanwezig" : "geen"}</div>
-              </details>
-
               {audioPopup.audios?.length ? (
                 audioPopup.audios.map(audio => (
                   <div className="practice-audio-block" key={audio.label}>
@@ -599,13 +764,6 @@ export default function App() {
                 </div>
               )}
             </div>
-
-            <button className="outline full-button" onClick={() => setAudioPopup(null)}>
-              Sluiten
-            </button>
-          </div>
-        </div>
-      )}
 
             <button className="outline full-button" onClick={() => setAudioPopup(null)}>
               Sluiten
