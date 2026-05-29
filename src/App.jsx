@@ -1,4 +1,4 @@
-
+﻿
 import React, { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import "./style.css";
@@ -10,6 +10,7 @@ const supabase = createClient(
 
 const LAST_MEMBER_KEY = "exaltation_last_member_name";
 const MUSIC_BASE_URL = "https://gospelkoorexaltation.nl/muziek/";
+const MUSIC_TABLE = "music_library_v2";
 
 function todayISO() { return new Date().toISOString().slice(0, 10); }
 function fmt(d) {
@@ -67,20 +68,31 @@ export default function App() {
   useEffect(() => { loadMembers(); loadMusicLibrary(); loadEvents(); loadHistory(); }, []);
   useEffect(() => { if (selectedEvent) loadAttendance(selectedEvent); }, [selectedEventId]);
 
-  function normalizeMusicUrl(path) {
-    if (!path) return "";
-    const trimmed = path.trim();
+  function normalizeMusicPath(path) {
+    const trimmed = String(path || "").trim();
+    if (!trimmed) return "";
 
-    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
-      return trimmed;
+    if (trimmed.startsWith(MUSIC_BASE_URL)) {
+      return trimmed.slice(MUSIC_BASE_URL.length).replace(/^\/+/, "");
     }
 
-    return MUSIC_BASE_URL + trimmed.replace(/^\/+/, "");
+    return trimmed.replace(/^\/+/, "");
+  }
+
+  function resolveMusicUrl(path) {
+    const clean = normalizeMusicPath(path);
+    if (!clean) return "";
+
+    if (clean.startsWith("http://") || clean.startsWith("https://")) {
+      return clean;
+    }
+
+    return MUSIC_BASE_URL + clean;
   }
 
   async function loadMusicLibrary() {
     const { data, error } = await supabase
-      .from("music_library")
+      .from(MUSIC_TABLE)
       .select("*")
       .eq("active", true)
       .order("title");
@@ -96,15 +108,15 @@ export default function App() {
   async function addMusicItem() {
     if (!newMusicTitle.trim()) return setMsg("Vul minimaal een titel in.");
 
-    const { error } = await supabase.from("music_library").insert({
+    const { error } = await supabase.from(MUSIC_TABLE).insert({
       title: newMusicTitle.trim(),
       category: newMusicCategory.trim() || "Algemeen",
-      pdf_url: normalizeMusicUrl(newMusicPdf),
-      soprano_url: normalizeMusicUrl(newMusicSoprano),
-      alto_url: normalizeMusicUrl(newMusicAlto),
-      tenor_url: normalizeMusicUrl(newMusicTenor),
-      bass_url: normalizeMusicUrl(newMusicBass),
-      choir_url: normalizeMusicUrl(newMusicChoir),
+      pdf_path: normalizeMusicPath(newMusicPdf),
+      soprano_path: normalizeMusicPath(newMusicSoprano),
+      alto_path: normalizeMusicPath(newMusicAlto),
+      tenor_path: normalizeMusicPath(newMusicTenor),
+      bass_path: normalizeMusicPath(newMusicBass),
+      choir_path: normalizeMusicPath(newMusicChoir),
       notes: newMusicNotes.trim(),
       active: true
     });
@@ -124,19 +136,20 @@ export default function App() {
   }
 
   async function updateMusicItem(id, field, value) {
+    const nextValue = field.endsWith("_path") ? normalizeMusicPath(value) : value;
     const { error } = await supabase
-      .from("music_library")
-      .update({ [field]: value })
+      .from(MUSIC_TABLE)
+      .update({ [field]: nextValue })
       .eq("id", id);
 
     if (error) return setMsg("Muziekitem wijzigen mislukt: " + error.message);
 
-    setMusicItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+    setMusicItems(prev => prev.map(item => item.id === id ? { ...item, [field]: nextValue } : item));
   }
 
   async function removeMusicItem(id) {
     const { error } = await supabase
-      .from("music_library")
+      .from(MUSIC_TABLE)
       .update({ active: false })
       .eq("id", id);
 
@@ -147,31 +160,32 @@ export default function App() {
   }
 
   function openLink(url) {
-    if (!url) return;
-    window.open(url, "_blank", "noopener,noreferrer");
+    const resolvedUrl = resolveMusicUrl(url);
+    if (!resolvedUrl) return;
+    window.open(resolvedUrl, "_blank", "noopener,noreferrer");
   }
 
   function getPracticeAudios(item) {
     const voice = String(me?.voice || "").trim().toLowerCase();
     const audios = [];
 
-    const add = (label, url) => {
-      const clean = String(url || "").trim();
+    const add = (label, path) => {
+      const clean = resolveMusicUrl(path);
       if (clean) audios.push({ label, url: clean });
     };
 
     if (voice.includes("dirigent")) {
-      add("Sopraan", item.soprano_url);
-      add("Alt", item.alto_url);
-      add("Tenor", item.tenor_url);
-      add("Bas", item.bass_url);
+      add("Sopraan", item.soprano_path);
+      add("Alt", item.alto_path);
+      add("Tenor", item.tenor_path);
+      add("Bas", item.bass_path);
       return audios;
     }
 
-    if (voice.includes("sopraan")) add("Sopraan", item.soprano_url);
-    else if (voice.includes("alt")) add("Alt", item.alto_url);
-    else if (voice.includes("tenor")) add("Tenor", item.tenor_url);
-    else if (voice.includes("bas")) add("Bas", item.bass_url);
+    if (voice.includes("sopraan")) add("Sopraan", item.soprano_path);
+    else if (voice.includes("alt")) add("Alt", item.alto_path);
+    else if (voice.includes("tenor")) add("Tenor", item.tenor_path);
+    else if (voice.includes("bas")) add("Bas", item.bass_path);
 
     return audios;
   }
@@ -180,9 +194,9 @@ export default function App() {
     setAudioPopup({
       title: item.title,
       voice: me?.voice || "lid",
-      pdf: String(item.pdf_url || "").trim(),
+      pdf: resolveMusicUrl(item.pdf_path),
       audios: getPracticeAudios(item),
-      choir: String(item.choir_url || "").trim()
+      choir: resolveMusicUrl(item.choir_path)
     });
   }
 
@@ -465,7 +479,7 @@ export default function App() {
                     {item.notes && <p className="music-notes">{item.notes}</p>}
                   </div>
                   <div className="music-actions">
-                    {item.pdf_url && (
+                    {item.pdf_path && (
                       <button className="outline" onClick={()=>openPracticeWindow(item)}>
                         PDF + oefenen
                       </button>
@@ -473,14 +487,14 @@ export default function App() {
 
                     {String(me?.voice || "").trim().toLowerCase().includes("dirigent") && (
                       <>
-                        {item.soprano_url && <button className="outline" onClick={()=>openLink(item.soprano_url)}>Sopraan audio</button>}
-                        {item.alto_url && <button className="outline" onClick={()=>openLink(item.alto_url)}>Alt audio</button>}
-                        {item.tenor_url && <button className="outline" onClick={()=>openLink(item.tenor_url)}>Tenor audio</button>}
-                        {item.bass_url && <button className="outline" onClick={()=>openLink(item.bass_url)}>Bas audio</button>}
+                        {item.soprano_path && <button className="outline" onClick={()=>openLink(item.soprano_path)}>Sopraan audio</button>}
+                        {item.alto_path && <button className="outline" onClick={()=>openLink(item.alto_path)}>Alt audio</button>}
+                        {item.tenor_path && <button className="outline" onClick={()=>openLink(item.tenor_path)}>Tenor audio</button>}
+                        {item.bass_path && <button className="outline" onClick={()=>openLink(item.bass_path)}>Bas audio</button>}
                       </>
                     )}
 
-                    {item.choir_url && <button className="outline choir-button" onClick={()=>openLink(item.choir_url)}>Volledige kooropname</button>}
+                    {item.choir_path && <button className="outline choir-button" onClick={()=>openLink(item.choir_path)}>Volledige kooropname</button>}
                   </div>
                 </div>
               ))}
@@ -556,12 +570,12 @@ export default function App() {
                       <tr key={item.id}>
                         <td><input value={item.title || ""} onChange={e=>updateMusicItem(item.id, "title", e.target.value)} /></td>
                         <td><input value={item.category || ""} onChange={e=>updateMusicItem(item.id, "category", e.target.value)} /></td>
-                        <td><input value={item.pdf_url || ""} onChange={e=>updateMusicItem(item.id, "pdf_url", e.target.value)} /></td>
-                        <td><input value={item.soprano_url || ""} onChange={e=>updateMusicItem(item.id, "soprano_url", e.target.value)} /></td>
-                        <td><input value={item.alto_url || ""} onChange={e=>updateMusicItem(item.id, "alto_url", e.target.value)} /></td>
-                        <td><input value={item.tenor_url || ""} onChange={e=>updateMusicItem(item.id, "tenor_url", e.target.value)} /></td>
-                        <td><input value={item.bass_url || ""} onChange={e=>updateMusicItem(item.id, "bass_url", e.target.value)} /></td>
-                        <td><input value={item.choir_url || ""} onChange={e=>updateMusicItem(item.id, "choir_url", e.target.value)} /></td>
+                        <td><input value={item.pdf_path || ""} onChange={e=>updateMusicItem(item.id, "pdf_path", e.target.value)} /></td>
+                        <td><input value={item.soprano_path || ""} onChange={e=>updateMusicItem(item.id, "soprano_path", e.target.value)} /></td>
+                        <td><input value={item.alto_path || ""} onChange={e=>updateMusicItem(item.id, "alto_path", e.target.value)} /></td>
+                        <td><input value={item.tenor_path || ""} onChange={e=>updateMusicItem(item.id, "tenor_path", e.target.value)} /></td>
+                        <td><input value={item.bass_path || ""} onChange={e=>updateMusicItem(item.id, "bass_path", e.target.value)} /></td>
+                        <td><input value={item.choir_path || ""} onChange={e=>updateMusicItem(item.id, "choir_path", e.target.value)} /></td>
                         <td><button className="outline danger" onClick={()=>removeMusicItem(item.id)}>Verwijderen</button></td>
                       </tr>
                     ))}
@@ -774,3 +788,4 @@ export default function App() {
     </div></main>
   );
 }
+

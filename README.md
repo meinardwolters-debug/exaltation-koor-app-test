@@ -1,21 +1,34 @@
-# Exaltation Koor App v8 - Muziekbibliotheek TEST
+# Exaltation Koor App - werkversie muziekbibliotheek v2
 
-Nieuwe functies:
-- menu-item Muziekbibliotheek
-- leden zien bladmuziek en audio-links
-- secretaris kan liederen toevoegen, wijzigen en verwijderen
-- links kunnen verwijzen naar bestanden op gospelkoorexaltation.nl/muziek/
+Deze werkversie sluit aan op de projectcontext uit `PROJECT_CONTEXT.md`.
 
-Eerst uitvoeren in Supabase SQL Editor:
+Belangrijkste punten:
+- React/Vite frontend met Supabase backend
+- Muziekbibliotheek gebruikt `music_library_v2`
+- Bestanden worden opgeslagen als pad vanaf `https://gospelkoorexaltation.nl/muziek/`
+- Leden zien alleen hun eigen stemgroepaudio plus de volledige kooropname
+- Dirigent ziet alle stemgroepen plus de volledige kooropname
+- Secretaris kan liederen toevoegen, wijzigen en deactiveren
+
+Eerst uitvoeren in Supabase SQL Editor op de testomgeving:
+
+```sql
 supabase-muziekbibliotheek.sql
+```
 
-Daarna uploaden naar de TEST GitHub repository en deployen via Vercel testomgeving.
+Velden in `music_library_v2`:
+- `title`
+- `category`
+- `pdf_path`
+- `soprano_path`
+- `alto_path`
+- `tenor_path`
+- `bass_path`
+- `choir_path`
+- `notes`
+- `active`
 
-
-## Kleine layout-aanpassing
-In Muziek beheren staan de audio-links nu twee aan twee:
-- Sopraan + Alt
-- Tenor + Bas
-
-
-v10 schone oefenpopup: alleen eigen stemgroepaudio + kooropname; dirigent alles.
+Voorbeeldpaden:
+- `bladmuziek/amazing-grace.pdf`
+- `audio/amazing-grace-sopraan.mp3`
+- `audio/amazing-grace-koor.mp3`
